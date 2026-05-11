@@ -4,7 +4,8 @@ import json
 
 import os
 BASE_DIR     = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CASCADE_PATH = os.path.join(BASE_DIR, "config", "haarcascade_frontalface_default.xml")
+CASCADE_PATH         = os.path.join(BASE_DIR, "config", "haarcascade_frontalface_default.xml")
+PROFILE_CASCADE_PATH = os.path.join(BASE_DIR, "config", "haarcascade_profileface.xml")
 FACES_DIR    = os.path.join(BASE_DIR, "data", "faces")
 LABEL_MAP    = os.path.join(BASE_DIR, "data", "models", "label_map.json")
 ENROLL_SECS   = 10
@@ -24,7 +25,8 @@ def preprocess(face_crop):
 
 def enroll_person(person_id, name, role="student"):
    
-    detector = cv2.CascadeClassifier(CASCADE_PATH)
+    detector_frontal = cv2.CascadeClassifier(CASCADE_PATH)
+    detector_profile = cv2.CascadeClassifier(PROFILE_CASCADE_PATH)
     cap      = cv2.VideoCapture(0)
     cap.set(cv2.CAP_PROP_FRAME_WIDTH,  640)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
@@ -55,7 +57,9 @@ def enroll_person(person_id, name, role="student"):
     saved = 0
     captured = 0
 
-    print(f"\n[ENROLL] Starting in 3 seconds — slowly turn face: front → left → right → up → down")
+    print(f"\n[ENROLL] Starting in 3 seconds — hold each angle for 2 seconds:")
+    print(f"         FRONT (2s) → LEFT (2s) → RIGHT (2s) → UP (2s) → DOWN (2s)")
+    print(f"         Exaggerate your side turns so the profile cascade can capture them.")
     cv2.waitKey(3000)
 
     while captured < total_frames:
@@ -66,12 +70,15 @@ def enroll_person(person_id, name, role="student"):
         captured += 1
 
         gray   = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        faces  = detector.detectMultiScale(
-            gray,
-            scaleFactor=1.1,
-            minNeighbors=5,
-            minSize=(80, 80)
+
+        # Try frontal cascade first, fall back to profile cascade
+        faces = detector_frontal.detectMultiScale(
+            gray, scaleFactor=1.1, minNeighbors=5, minSize=(80, 80)
         )
+        if len(faces) == 0:
+            faces = detector_profile.detectMultiScale(
+                gray, scaleFactor=1.1, minNeighbors=5, minSize=(80, 80)
+            )
 
         if len(faces) == 0:
             cv2.putText(frame, "No face detected — keep moving slowly",
