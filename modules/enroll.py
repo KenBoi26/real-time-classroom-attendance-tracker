@@ -1,6 +1,7 @@
 import cv2
 import os
 import json
+from modules.camera import get_camera
 
 import os
 BASE_DIR     = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -23,13 +24,18 @@ def preprocess(face_crop):
     clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
     return clahe.apply(resized)
 
-def enroll_person(person_id, name, role="student"):
+def enroll_person(person_id, name, role="student", video_path=None):
    
     detector_frontal = cv2.CascadeClassifier(CASCADE_PATH)
     detector_profile = cv2.CascadeClassifier(PROFILE_CASCADE_PATH)
-    cap      = cv2.VideoCapture(0)
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH,  640)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+    
+    if video_path:
+        cap = cv2.VideoCapture(video_path)
+        if not cap.isOpened():
+            print(f"[ENROLL] Error: Could not open video file '{video_path}'")
+            return
+    else:
+        cap = get_camera(0)
 
     save_dir = os.path.join(FACES_DIR, str(person_id))
     os.makedirs(save_dir, exist_ok=True)
@@ -57,10 +63,14 @@ def enroll_person(person_id, name, role="student"):
     saved = 0
     captured = 0
 
-    print(f"\n[ENROLL] Starting in 3 seconds — hold each angle for 2 seconds:")
-    print(f"         FRONT (2s) → LEFT (2s) → RIGHT (2s) → UP (2s) → DOWN (2s)")
-    print(f"         Exaggerate your side turns so the profile cascade can capture them.")
-    cv2.waitKey(3000)
+    if not video_path:
+        print(f"\n[ENROLL] Starting in 3 seconds — hold each angle for 2 seconds:")
+        print(f"         FRONT (2s) → LEFT (2s) → RIGHT (2s) → UP (2s) → DOWN (2s)")
+        print(f"         Exaggerate your side turns so the profile cascade can capture them.")
+        print(f"         IMPORTANT: Also cover parts of your face with your hand (chin, cheek) for robust training.")
+        cv2.waitKey(3000)
+    else:
+        print(f"\n[ENROLL] Processing video file: {video_path}")
 
     while captured < total_frames:
         ret, frame = cap.read()
@@ -73,11 +83,11 @@ def enroll_person(person_id, name, role="student"):
 
         # Try frontal cascade first, fall back to profile cascade
         faces = detector_frontal.detectMultiScale(
-            gray, scaleFactor=1.1, minNeighbors=5, minSize=(80, 80)
+            gray, scaleFactor=1.05, minNeighbors=4, minSize=(80, 80)
         )
         if len(faces) == 0:
             faces = detector_profile.detectMultiScale(
-                gray, scaleFactor=1.1, minNeighbors=5, minSize=(80, 80)
+                gray, scaleFactor=1.05, minNeighbors=4, minSize=(80, 80)
             )
 
         if len(faces) == 0:
@@ -138,4 +148,9 @@ if __name__ == "__main__":
     person_id = int(input("Enter registration number: "))
     name      = input("Enter full name: ").strip()
 
-    enroll_person(person_id, name, role)
+    src_choice = input("Enroll from (1) Webcam or (2) Video file: ").strip()
+    video_path = None
+    if src_choice == "2":
+        video_path = input("Enter path to video file: ").strip()
+
+    enroll_person(person_id, name, role, video_path)

@@ -25,6 +25,7 @@ from modules.tracker    import init_tracker, update_tracker, sweep_grace_periods
 from modules.presence   import calculate_presence
 from modules.dashboard  import print_dashboard
 from modules.reporter   import save_attendance_report, save_teacher_report
+from modules.camera     import get_camera
 
 
 def load_label_roles():
@@ -105,9 +106,7 @@ def start_session():
     detector   = cv2.CascadeClassifier(CASCADE_PATH)
     tracker    = init_tracker()
 
-    cap = cv2.VideoCapture(0)
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH,  640)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+    cap = get_camera(0)
 
     session_start   = time.time()
     last_dashboard  = 0.0
@@ -126,8 +125,8 @@ def start_session():
 
         faces = detector.detectMultiScale(
             gray,
-            scaleFactor=1.1,
-            minNeighbors=5,
+            scaleFactor=1.05,
+            minNeighbors=4,
             minSize=MIN_FACE_SIZE
         )
 
@@ -241,7 +240,13 @@ def main_menu():
             role      = input("  Role (student / teacher): ").strip().lower()
             person_id = int(input("  Enter registration number: "))
             name      = input("  Enter full name: ").strip()
-            enroll_person(person_id, name, role)
+            
+            src_choice = input("  Enroll from (1) Webcam or (2) Video file: ").strip()
+            video_path = None
+            if src_choice == "2":
+                video_path = input("  Enter path to video file: ").strip()
+                
+            enroll_person(person_id, name, role, video_path)
 
         elif choice == "2":
             from modules.train import train_model

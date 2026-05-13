@@ -1,6 +1,7 @@
 import cv2
 import os
 import json
+from modules.camera import get_camera
 
 # ── Paths ────────────────────────────────────────────────
 BASE_DIR        = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -9,9 +10,7 @@ EXIT_ZONE_PATH  = os.path.join(BASE_DIR, "config", "exit_zone.json")
 
 def setup_exit_zone():
     """Open camera, let admin draw a rectangle over the door area, save to JSON."""
-    cap = cv2.VideoCapture(0)
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH,  640)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+    cap = get_camera(0)
 
     ret, frame = cap.read()
     cap.release()

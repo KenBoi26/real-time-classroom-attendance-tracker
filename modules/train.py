@@ -1,7 +1,9 @@
 import cv2
 import os
 import json
+import random
 import numpy as np
+from collections import defaultdict
 
 # ── Paths ────────────────────────────────────────────────
 BASE_DIR    = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -12,7 +14,16 @@ LABEL_MAP   = os.path.join(MODELS_DIR, "label_map.json")
 
 os.makedirs(MODELS_DIR, exist_ok=True)
 
+# ── Split ratios ─────────────────────────────────────────
+TRAIN_RATIO = 0.70
+VAL_RATIO   = 0.15
+TEST_RATIO  = 0.15
+
+RANDOM_SEED = 42
+
+
 def load_training_data():
+    """Load all face images grouped by person ID."""
     faces  = []
     labels = []
 
@@ -50,6 +61,95 @@ def load_training_data():
 
     return faces, labels
 
+
+def stratified_split(faces, labels, train_ratio, val_ratio, test_ratio, seed=42):
+    """
+    Split data into train / validation / test sets using stratified sampling.
+    Each person's images are split proportionally so every split contains
+    samples from every enrolled person.
+    """
+    assert abs(train_ratio + val_ratio + test_ratio - 1.0) < 1e-6, \
+        "Split ratios must sum to 1.0"
+
+    rng = random.Random(seed)
+
+    # Group indices by label
+    label_to_indices = defaultdict(list)
+    for idx, lbl in enumerate(labels):
+        label_to_indices[lbl].append(idx)
+
+    train_idx, val_idx, test_idx = [], [], []
+
+    for lbl, indices in label_to_indices.items():
+        rng.shuffle(indices)
+        n = len(indices)
+        n_train = max(1, int(n * train_ratio))          # at least 1 for training
+        n_val   = max(1, int(n * val_ratio))             # at least 1 for validation
+        # rest goes to test (at least 1 if possible)
+        n_test  = max(1, n - n_train - n_val)
+
+        # Re-adjust if we over-allocated (very small datasets)
+        if n_train + n_val + n_test > n:
+            n_test = n - n_train - n_val
+            if n_test < 0:
+                n_val  = n - n_train
+                n_test = 0
+
+        train_idx.extend(indices[:n_train])
+        val_idx.extend(indices[n_train:n_train + n_val])
+        test_idx.extend(indices[n_train + n_val:n_train + n_val + n_test])
+
+    def gather(idxs):
+        return ([faces[i] for i in idxs], [labels[i] for i in idxs])
+
+    return gather(train_idx), gather(val_idx), gather(test_idx)
+
+
+def evaluate(recognizer, faces, labels, id_to_name, set_name="Validation"):
+    """
+    Run recognizer.predict on each sample and report accuracy.
+    Returns overall accuracy (float).
+    """
+    if len(faces) == 0:
+        print(f"[{set_name.upper()}] No samples to evaluate.")
+        return 0.0
+
+    correct = 0
+    total   = len(faces)
+
+    # Per-person stats
+    person_correct = defaultdict(int)
+    person_total   = defaultdict(int)
+
+    for img, true_label in zip(faces, labels):
+        pred_label, confidence = recognizer.predict(img)
+        person_total[true_label] += 1
+        if pred_label == true_label:
+            correct += 1
+            person_correct[true_label] += 1
+
+    overall_acc = (correct / total) * 100
+
+    print(f"\n{'=' * 60}")
+    print(f"   {set_name.upper()} SET EVALUATION")
+    print(f"{'=' * 60}")
+    print(f"  {'Name':<25} {'Correct':<10} {'Total':<10} {'Accuracy'}")
+    print(f"{'-' * 60}")
+
+    for lbl in sorted(person_total.keys()):
+        name = id_to_name.get(lbl, f"ID {lbl}")
+        c    = person_correct[lbl]
+        t    = person_total[lbl]
+        acc  = (c / t) * 100 if t > 0 else 0.0
+        print(f"  {name:<25} {c:<10} {t:<10} {acc:.1f}%")
+
+    print(f"{'-' * 60}")
+    print(f"  {'OVERALL':<25} {correct:<10} {total:<10} {overall_acc:.1f}%")
+    print(f"{'=' * 60}")
+
+    return overall_acc
+
+
 def train_model():
     print("\n[TRAIN] Loading training data...")
     faces, labels = load_training_data()
@@ -58,7 +158,33 @@ def train_model():
         print("[TRAIN] No training data found. Exiting.")
         return
 
-    print(f"\n[TRAIN] Training on {len(faces)} total frames across {len(set(labels))} people...")
+    # ── Load id→name mapping for evaluation reports ──────
+    with open(LABEL_MAP) as f:
+        label_data = json.load(f)
+    id_to_name = {int(k): v["name"] for k, v in label_data.items()}
+
+    # ── Stratified split ────────────────────────────────
+    print(f"\n[TRAIN] Splitting data → Train {TRAIN_RATIO*100:.0f}% | "
+          f"Val {VAL_RATIO*100:.0f}% | Test {TEST_RATIO*100:.0f}%  "
+          f"(seed={RANDOM_SEED})")
+
+    (train_faces, train_labels), \
+    (val_faces,   val_labels),   \
+    (test_faces,  test_labels) = stratified_split(
+        faces, labels,
+        TRAIN_RATIO, VAL_RATIO, TEST_RATIO,
+        seed=RANDOM_SEED
+    )
+
+    n_people = len(set(labels))
+    print(f"[TRAIN]   Train : {len(train_faces)} samples")
+    print(f"[TRAIN]   Val   : {len(val_faces)} samples")
+    print(f"[TRAIN]   Test  : {len(test_faces)} samples")
+    print(f"[TRAIN]   People: {n_people}")
+
+    # ── Train LBPH on the TRAINING set only ─────────────
+    print(f"\n[TRAIN] Training LBPH on {len(train_faces)} samples "
+          f"across {len(set(train_labels))} people...")
 
     recognizer = cv2.face.LBPHFaceRecognizer_create(
         radius=1,
@@ -66,12 +192,32 @@ def train_model():
         grid_x=8,
         grid_y=8
     )
-    recognizer.train(faces, np.array(labels))
-    recognizer.save(MODEL_PATH)
+    recognizer.train(train_faces, np.array(train_labels))
 
-    print(f"[TRAIN] Model saved → {MODEL_PATH}")
+    # ── Evaluate on VALIDATION set ──────────────────────
+    val_acc = evaluate(recognizer, val_faces, val_labels, id_to_name,
+                       set_name="Validation")
+
+    # ── Evaluate on TEST set ────────────────────────────
+    test_acc = evaluate(recognizer, test_faces, test_labels, id_to_name,
+                        set_name="Test")
+
+    # ── Save the model ──────────────────────────────────
+    recognizer.save(MODEL_PATH)
+    print(f"\n[TRAIN] Model saved → {MODEL_PATH}")
+
+    # ── Final summary ───────────────────────────────────
+    print(f"\n{'=' * 60}")
+    print(f"   TRAINING SUMMARY")
+    print(f"{'=' * 60}")
+    print(f"  Train samples  : {len(train_faces)}")
+    print(f"  Val samples    : {len(val_faces)}")
+    print(f"  Test samples   : {len(test_faces)}")
+    print(f"  Val accuracy   : {val_acc:.1f}%")
+    print(f"  Test accuracy  : {test_acc:.1f}%")
+    print(f"{'=' * 60}")
     print(f"[TRAIN] Training complete.")
+
 
 if __name__ == "__main__":
     train_model()
-

@@ -2,6 +2,7 @@ import cv2
 import os
 import json
 import numpy as np
+from modules.camera import get_camera
 
 # ── Paths ────────────────────────────────────────────────
 BASE_DIR     = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -39,9 +40,7 @@ def preprocess(face_crop):
 def run_detection():
     recognizer, id_to_name = load_recognizer()
     detector = cv2.CascadeClassifier(CASCADE_PATH)
-    cap      = cv2.VideoCapture(0)
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH,  640)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+    cap      = get_camera(0)
 
     print("[DETECT] Press Q to quit.")
 
@@ -53,9 +52,9 @@ def run_detection():
         gray  = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         faces = detector.detectMultiScale(
             gray,
-            scaleFactor=1.1,
-            minNeighbors=5,
-            minSize=(80, 80)
+            scaleFactor=1.05,
+            minNeighbors=4,
+            minSize=(30, 30)
         )
 
         for (x, y, w, h) in faces:
