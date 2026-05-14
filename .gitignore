@@ -1,3 +1,7 @@
 venv/
 __pycache__/
 *.pyc
+data/models/*.yml
+data/faces/
+data/videos/
+reports/*.csv
