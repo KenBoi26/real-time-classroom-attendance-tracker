@@ -14,7 +14,7 @@ LABEL_MAP     = os.path.join(BASE_DIR, "data", "models", "label_map.json")
 CONFIDENCE_THRESHOLD = 70
 FACE_RESIZE          = (200, 200)
 PAD                  = 40
-MIN_FACE_SIZE        = (30, 30)  # lower = detects smaller/distant faces
+MIN_FACE_SIZE        = (60, 60)  # increased to prevent detecting background noise
 DASHBOARD_INTERVAL   = 1      # seconds between dashboard refreshes
 EXIT_ZONE_COLOR      = (0, 255, 255)   # yellow rectangle on frame
 
@@ -125,8 +125,8 @@ def start_session():
 
         faces = detector.detectMultiScale(
             gray,
-            scaleFactor=1.05,
-            minNeighbors=4,
+            scaleFactor=1.1,
+            minNeighbors=7,
             minSize=MIN_FACE_SIZE
         )
 
@@ -237,14 +237,48 @@ def main_menu():
 
         if choice == "1":
             from modules.enroll import enroll_person
-            role      = input("  Role (student / teacher): ").strip().lower()
-            person_id = int(input("  Enter registration number: "))
-            name      = input("  Enter full name: ").strip()
             
-            src_choice = input("  Enroll from (1) Webcam or (2) Video file: ").strip()
+            src_choice = input("  Enroll from (1) Webcam or (2) Video file in data/videos: ").strip()
             video_path = None
             if src_choice == "2":
-                video_path = input("  Enter path to video file: ").strip()
+                videos_dir = os.path.join(BASE_DIR, "data", "videos")
+                if not os.path.exists(videos_dir):
+                    os.makedirs(videos_dir)
+                videos = [f for f in os.listdir(videos_dir) if f.endswith(('.mp4', '.avi', '.mov', '.mkv'))]
+                
+                if not videos:
+                    print("  No videos found in data/videos/")
+                    continue
+                
+                print("  Available videos:")
+                for i, v in enumerate(videos, start=1):
+                    print(f"    {i}. {v}")
+                
+                try:
+                    v_choice = int(input(f"  Select video (1-{len(videos)}): ").strip())
+                    video_filename = videos[v_choice - 1]
+                    video_path = os.path.join(videos_dir, video_filename)
+                except (ValueError, IndexError):
+                    print("  Invalid selection.")
+                    continue
+                
+                base_name = os.path.splitext(video_filename)[0]
+                if " - " in base_name:
+                    try:
+                        person_id = int(base_name.split(" - ")[0].strip())
+                        name = base_name.split(" - ")[1].strip()
+                        print(f"  Auto-detected -> ID: {person_id}, Name: {name}")
+                    except ValueError:
+                        person_id = int(input("  Enter registration number: "))
+                        name      = input("  Enter full name: ").strip()
+                else:
+                    person_id = int(input("  Enter registration number: "))
+                    name      = input("  Enter full name: ").strip()
+            else:
+                person_id = int(input("  Enter registration number: "))
+                name      = input("  Enter full name: ").strip()
+                
+            role = input("  Role (student / teacher): ").strip().lower()
                 
             enroll_person(person_id, name, role, video_path)
 

@@ -1,9 +1,9 @@
 import cv2
 
-def get_camera(source=0, resolutions=[(1920, 1080), (1280, 720), (640, 480)]):
+def get_camera(source=0, resolutions=[(640, 480), (1280, 720)]):
     """
-    Initializes the camera and attempts to set the highest possible resolution
-    from the provided list. Falls back to lower resolutions if not supported.
+    Initializes the camera and sets a lower resolution (640x480 prioritized)
+    to ensure smooth and lag-free real-time face detection.
     """
     cap = cv2.VideoCapture(source)
     

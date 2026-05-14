@@ -52,9 +52,9 @@ def run_detection():
         gray  = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         faces = detector.detectMultiScale(
             gray,
-            scaleFactor=1.05,
-            minNeighbors=4,
-            minSize=(30, 30)
+            scaleFactor=1.1,
+            minNeighbors=7,
+            minSize=(60, 60)
         )
 
         for (x, y, w, h) in faces:

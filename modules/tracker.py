@@ -1,7 +1,8 @@
 import time
 
-# ── Settings ─────────────────────────────────────────────
 GRACE_PERIOD = 5    # seconds after exit zone sighting before marking OUT
+PENDING_IN_DURATION = 5.0  # seconds of continuous detection to mark as IN
+GAP_TOLERANCE = 2.0        # seconds of allowed missing frames without resetting continuous timer
 
 
 def init_tracker():
@@ -23,21 +24,29 @@ def update_tracker(tracker, person_id, name, role, cx, cy, zone, now):
         tracker[person_id] = {
             "name":                 name,
             "role":                 role,
-            "status":               "IN",
-            "logs":                 [(now, "IN")],
+            "status":               "PENDING",
+            "logs":                 [],
             "exit_zone_last_seen":  None,
             "last_seen_time":       now,
+            "continuous_since":     now,
         }
         return
 
     entry = tracker[person_id]
+    
+    # ── Reset continuous timer if gap in detection is too large ─────
+    if now - entry["last_seen_time"] > GAP_TOLERANCE:
+        entry["continuous_since"] = now
+        
     entry["last_seen_time"] = now
 
-    # ── If previously OUT and now reappearing → mark IN ─────────────
-    if entry["status"] == "OUT":
-        entry["status"] = "IN"
-        entry["logs"].append((now, "IN"))
-        entry["exit_zone_last_seen"] = None
+    # ── If previously OUT or PENDING and now reappearing ────────────
+    if entry["status"] in ["OUT", "PENDING"]:
+        # Only mark IN if they've been continuously seen for PENDING_IN_DURATION
+        if now - entry["continuous_since"] >= PENDING_IN_DURATION:
+            entry["status"] = "IN"
+            entry["logs"].append((entry["continuous_since"], "IN"))
+            entry["exit_zone_last_seen"] = None
         return
 
     # ── Step 6: check position against exit zone ────────────────────

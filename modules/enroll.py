@@ -83,11 +83,11 @@ def enroll_person(person_id, name, role="student", video_path=None):
 
         # Try frontal cascade first, fall back to profile cascade
         faces = detector_frontal.detectMultiScale(
-            gray, scaleFactor=1.05, minNeighbors=4, minSize=(80, 80)
+            gray, scaleFactor=1.1, minNeighbors=7, minSize=(80, 80)
         )
         if len(faces) == 0:
             faces = detector_profile.detectMultiScale(
-                gray, scaleFactor=1.05, minNeighbors=4, minSize=(80, 80)
+                gray, scaleFactor=1.1, minNeighbors=7, minSize=(80, 80)
             )
 
         if len(faces) == 0:

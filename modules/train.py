@@ -2,6 +2,7 @@ import cv2
 import os
 import json
 import random
+import shutil
 import numpy as np
 from collections import defaultdict
 
@@ -182,17 +183,23 @@ def train_model():
     print(f"[TRAIN]   Test  : {len(test_faces)} samples")
     print(f"[TRAIN]   People: {n_people}")
 
-    # ── Train LBPH on the TRAINING set only ─────────────
-    print(f"\n[TRAIN] Training LBPH on {len(train_faces)} samples "
-          f"across {len(set(train_labels))} people...")
-
+    # ── Train or Update LBPH on the TRAINING set only ─────────────
     recognizer = cv2.face.LBPHFaceRecognizer_create(
         radius=1,
         neighbors=8,
         grid_x=8,
         grid_y=8
     )
-    recognizer.train(train_faces, np.array(train_labels))
+
+    if os.path.exists(MODEL_PATH):
+        print(f"\n[TRAIN] Updating existing model with {len(train_faces)} new samples "
+              f"across {len(set(train_labels))} people...")
+        recognizer.read(MODEL_PATH)
+        recognizer.update(train_faces, np.array(train_labels))
+    else:
+        print(f"\n[TRAIN] Training NEW model on {len(train_faces)} samples "
+              f"across {len(set(train_labels))} people...")
+        recognizer.train(train_faces, np.array(train_labels))
 
     # ── Evaluate on VALIDATION set ──────────────────────
     val_acc = evaluate(recognizer, val_faces, val_labels, id_to_name,
@@ -205,6 +212,14 @@ def train_model():
     # ── Save the model ──────────────────────────────────
     recognizer.save(MODEL_PATH)
     print(f"\n[TRAIN] Model saved → {MODEL_PATH}")
+
+    # ── Delete raw photos to save space ─────────────────
+    print("\n[TRAIN] Cleaning up raw face images to save space...")
+    for person_id in set(labels):
+        person_dir = os.path.join(FACES_DIR, str(person_id))
+        if os.path.exists(person_dir):
+            shutil.rmtree(person_dir)
+            print(f"  Deleted photos for ID {person_id}")
 
     # ── Final summary ───────────────────────────────────
     print(f"\n{'=' * 60}")
