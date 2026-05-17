@@ -5,20 +5,17 @@ import json
 import time
 from datetime import datetime
 
-# ── Paths ────────────────────────────────────────────────
 BASE_DIR      = os.path.dirname(os.path.abspath(__file__))
 CASCADE_PATH  = os.path.join(BASE_DIR, "config", "haarcascade_frontalface_default.xml")
 LABEL_MAP     = os.path.join(BASE_DIR, "data", "models", "label_map.json")
 
-# ── Settings ─────────────────────────────────────────────
 CONFIDENCE_THRESHOLD = 70
 FACE_RESIZE          = (200, 200)
 PAD                  = 40
-MIN_FACE_SIZE        = (60, 60)  # increased to prevent detecting background noise
-DASHBOARD_INTERVAL   = 1      # seconds between dashboard refreshes
-EXIT_ZONE_COLOR      = (0, 255, 255)   # yellow rectangle on frame
+MIN_FACE_SIZE        = (60, 60)
+DASHBOARD_INTERVAL   = 1
+EXIT_ZONE_COLOR      = (0, 255, 255)
 
-# ── Imports from project modules ─────────────────────────
 from modules.detector   import load_recognizer, preprocess
 from modules.exit_zone  import setup_exit_zone, load_exit_zone, is_inside_exit_zone
 from modules.tracker    import init_tracker, update_tracker, sweep_grace_periods
@@ -29,7 +26,6 @@ from modules.camera     import get_camera
 
 
 def load_label_roles():
-    """Load label_map.json to get {int_id: role} mapping."""
     if not os.path.exists(LABEL_MAP):
         return {}
     with open(LABEL_MAP) as f:
@@ -38,8 +34,6 @@ def load_label_roles():
 
 
 def start_session():
-    """Step 12: Start a tracking session — the main loop."""
-    # ── Load model, cascade, exit zone ───────────────────
     try:
         recognizer, id_to_name = load_recognizer()
     except FileNotFoundError as e:
@@ -52,17 +46,14 @@ def start_session():
         print(e)
         return
 
-    # ── Load label map for role lookup ───────────────────
     id_to_role = load_label_roles()
 
-    # ── Load full label map for teacher validation ───────
     if not os.path.exists(LABEL_MAP):
         print("[SESSION] No label map found. Enroll people first.")
         return
     with open(LABEL_MAP) as f:
         label_data = json.load(f)
 
-    # ── Show enrolled teachers and let user pick by serial number ──
     teachers_list = [(tid, info) for tid, info in label_data.items()
                      if info.get("role", "student") == "teacher"]
 
@@ -89,10 +80,8 @@ def start_session():
     teacher_name = teacher_info["name"]
     print(f"  Welcome, {teacher_name}!")
 
-    # ── Prompt for section name ──────────────────────────
     section_name = input("  Enter section name (e.g. CSE-6A): ").strip()
 
-    # ── Prompt for class duration ────────────────────────
     while True:
         try:
             class_duration = int(input("  Enter class duration in seconds: ").strip())
@@ -114,7 +103,6 @@ def start_session():
     print(f"[SESSION] Session started — Section: {section_name}, Duration: {class_duration}s")
     print("[SESSION] Press Q on the video window to stop.")
 
-    # ── Main loop ────────────────────────────────────────
     while True:
         ret, frame = cap.read()
         if not ret:
@@ -130,9 +118,7 @@ def start_session():
             minSize=MIN_FACE_SIZE
         )
 
-        # ── Process each detected face ──────────────────
         for (x, y, w, h) in faces:
-            # Padded crop (same as detector.py)
             x1 = max(x - PAD, 0)
             y1 = max(y - PAD, 0)
             x2 = min(x + w + PAD, frame.shape[1])
@@ -147,7 +133,6 @@ def start_session():
                 box_color = (0, 255, 0)
                 label_text = f"{name} ({confidence:.1f})"
 
-                # Face center for position tracking
                 cx = x + w // 2
                 cy = y + h // 2
 
@@ -156,32 +141,26 @@ def start_session():
                 box_color  = (0, 0, 255)
                 label_text = f"Unknown ({confidence:.1f})"
 
-            # Draw bounding box and label
             cv2.rectangle(frame, (x1, y1), (x2, y2), box_color, 2)
             cv2.putText(frame, label_text, (x1, y1 - 10),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, box_color, 2)
 
-        # ── Sweep grace periods every frame ─────────────
         sweep_grace_periods(tracker, now)
 
-        # ── Draw exit zone rectangle ────────────────────
         zx, zy = zone["x"], zone["y"]
         zw, zh = zone["w"], zone["h"]
         cv2.rectangle(frame, (zx, zy), (zx + zw, zy + zh), EXIT_ZONE_COLOR, 2)
         cv2.putText(frame, "EXIT ZONE", (zx, zy - 10),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, EXIT_ZONE_COLOR, 2)
 
-        # ── Dashboard refresh ───────────────────────────
         if now - last_dashboard >= DASHBOARD_INTERVAL:
             print_dashboard(tracker, session_start, now,
                             section_name=section_name,
                             teacher_name=teacher_name)
             last_dashboard = now
 
-        # ── Show frame ──────────────────────────────────
         cv2.imshow("Attendance Session", frame)
 
-        # Auto-stop when class duration is reached
         if (now - session_start) >= class_duration:
             print("\n[SESSION] Class duration reached. Stopping automatically.")
             break
@@ -189,7 +168,6 @@ def start_session():
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
-    # ── Session end ──────────────────────────────────────
     cap.release()
     cv2.destroyAllWindows()
 
@@ -199,11 +177,9 @@ def start_session():
     print("\n[SESSION] Session ended.")
     print(f"[SESSION] Duration: {session_end - session_start:.1f} seconds")
 
-    # ── Step 9: final presence calculation ───────────────
     results = calculate_presence(tracker, session_start, session_end,
                                  class_duration=class_duration)
 
-    # ── Print final summary ──────────────────────────────
     print("\n" + "=" * 60)
     print(f"   FINAL ATTENDANCE REPORT — {section_name}")
     print("=" * 60)
@@ -213,7 +189,6 @@ def start_session():
         print(f"  {r['name']:<20} {r['total_in']:<14} {r['presence_pct']:<14} {r['verdict']}")
     print("=" * 60)
 
-    # ── Step 13: save reports ────────────────────────────
     save_attendance_report(results, session_date, section_name=section_name)
     save_teacher_report(results, session_date, section_name=section_name)
 
@@ -221,7 +196,6 @@ def start_session():
 
 
 def main_menu():
-    """Simple terminal menu — entry point."""
     while True:
         print("\n" + "=" * 40)
         print("  Classroom Attendance System")

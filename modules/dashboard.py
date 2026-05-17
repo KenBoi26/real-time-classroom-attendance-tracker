@@ -1,12 +1,10 @@
 import os
 import time
 
-# ── Settings ─────────────────────────────────────────────
-DASHBOARD_INTERVAL = 1   # seconds between dashboard refreshes
+DASHBOARD_INTERVAL = 1
 
 
 def _compute_running_presence(entry, session_start, now):
-    """Compute presence % for a single person up to current time."""
     elapsed = now - session_start
     if elapsed <= 0:
         return 0.0
@@ -22,7 +20,6 @@ def _compute_running_presence(entry, session_start, now):
             total_in += timestamp - in_time
             in_time = None
 
-    # If currently IN, count up to now
     if in_time is not None:
         total_in += now - in_time
 
@@ -30,7 +27,6 @@ def _compute_running_presence(entry, session_start, now):
 
 
 def print_dashboard(tracker, session_start, now, section_name="", teacher_name=""):
-    """Step 11: Clear terminal and print a live status table."""
     os.system("cls" if os.name == "nt" else "clear")
 
     elapsed   = now - session_start

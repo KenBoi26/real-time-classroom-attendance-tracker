@@ -3,7 +3,6 @@ import os
 import json
 from modules.camera import get_camera
 
-import os
 BASE_DIR     = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CASCADE_PATH         = os.path.join(BASE_DIR, "config", "haarcascade_frontalface_default.xml")
 PROFILE_CASCADE_PATH = os.path.join(BASE_DIR, "config", "haarcascade_profileface.xml")
@@ -20,12 +19,10 @@ def preprocess(face_crop):
     gray  = cv2.cvtColor(face_crop, cv2.COLOR_BGR2GRAY)
     resized = cv2.resize(gray, FACE_RESIZE)
 
-    # I've applied CLAHE to normalize light
     clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
     return clahe.apply(resized)
 
 def enroll_person(person_id, name, role="student", video_path=None):
-   
     detector_frontal = cv2.CascadeClassifier(CASCADE_PATH)
     detector_profile = cv2.CascadeClassifier(PROFILE_CASCADE_PATH)
     
@@ -54,7 +51,6 @@ def enroll_person(person_id, name, role="student", video_path=None):
                 cap.release()
                 return
 
-            # Clear old frames before re-enrolling
             for f in os.listdir(save_dir):
                 os.remove(os.path.join(save_dir, f))
             print(f"[ENROLL] Old frames cleared. Starting fresh for ID {person_id}.")
@@ -81,7 +77,6 @@ def enroll_person(person_id, name, role="student", video_path=None):
 
         gray   = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-        # Try frontal cascade first, fall back to profile cascade
         faces = detector_frontal.detectMultiScale(
             gray, scaleFactor=1.1, minNeighbors=7, minSize=(80, 80)
         )
@@ -96,13 +91,11 @@ def enroll_person(person_id, name, role="student", video_path=None):
         else:
             x, y, w, h = faces[0]
 
-            
             pad = 40
             x1 = max(x - pad, 0)
             y1 = max(y - pad, 0)
             x2 = min(x + w + pad, frame.shape[1])
             y2 = min(y + h + pad, frame.shape[0])
-            
 
             crop     = preprocess(frame[y1:y2, x1:x2])
             filename = os.path.join(save_dir, f"{person_id}_{saved:04d}.jpg")
@@ -127,7 +120,6 @@ def enroll_person(person_id, name, role="student", video_path=None):
     cv2.destroyAllWindows()
     print(f"[ENROLL] Done. {saved} frames saved for {name} (ID: {person_id})")
 
-    
     if os.path.exists(LABEL_MAP):
         with open(LABEL_MAP) as f:
             label_data = json.load(f)

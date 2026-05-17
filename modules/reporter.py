@@ -2,7 +2,6 @@ import csv
 import os
 from datetime import datetime
 
-# ── Paths ────────────────────────────────────────────────
 BASE_DIR     = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 REPORTS_DIR  = os.path.join(BASE_DIR, "reports")
 
@@ -10,10 +9,6 @@ os.makedirs(REPORTS_DIR, exist_ok=True)
 
 
 def save_attendance_report(results, session_date, section_name=""):
-    """
-    Step 13: Write attendance_<section>_<date>.csv with all students.
-    Columns: Name, Total IN Duration (s), Presence %, Verdict, Event Log
-    """
     prefix = f"attendance_{section_name}_" if section_name else "attendance_"
     filename = os.path.join(REPORTS_DIR, f"{prefix}{session_date}.csv")
 
@@ -22,7 +17,6 @@ def save_attendance_report(results, session_date, section_name=""):
         writer.writerow(["Name", "Total IN Duration (s)", "Presence %", "Verdict", "Event Log"])
 
         for r in results:
-            # Format each (timestamp, event) as "HH:MM:SS IN" / "HH:MM:SS OUT"
             log_entries = []
             for ts, event in r.get("logs", []):
                 time_str = datetime.fromtimestamp(ts).strftime("%H:%M:%S")
@@ -36,10 +30,6 @@ def save_attendance_report(results, session_date, section_name=""):
 
 
 def save_teacher_report(results, session_date, section_name=""):
-    """
-    Step 13: Write teacher_<section>_<date>.csv with teacher records only.
-    Columns: Name, Time Arrived, Total Duration Present (s)
-    """
     teachers = [r for r in results if r["role"] == "teacher"]
 
     if not teachers:

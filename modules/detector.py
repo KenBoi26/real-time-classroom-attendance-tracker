@@ -4,14 +4,12 @@ import json
 import numpy as np
 from modules.camera import get_camera
 
-# ── Paths ────────────────────────────────────────────────
 BASE_DIR     = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CASCADE_PATH = os.path.join(BASE_DIR, "config", "haarcascade_frontalface_default.xml")
 MODEL_PATH   = os.path.join(BASE_DIR, "data", "models", "lbph_model.yml")
 LABEL_MAP    = os.path.join(BASE_DIR, "data", "models", "label_map.json")
 
-# ── Settings ─────────────────────────────────────────────
-CONFIDENCE_THRESHOLD = 70   # lower = stricter; tune this in Step 14
+CONFIDENCE_THRESHOLD = 70
 FACE_RESIZE          = (200, 200)
 PAD                  = 40
 
@@ -25,7 +23,6 @@ def load_recognizer():
     with open(LABEL_MAP) as f:
         label_data = json.load(f)
 
-    # flip to {int_id: name} for quick lookup during recognition
     id_to_name = {int(k): v["name"] for k, v in label_data.items()}
 
     print("[DETECT] Model and label map loaded.")
@@ -58,7 +55,6 @@ def run_detection():
         )
 
         for (x, y, w, h) in faces:
-            # ── Padded crop ──────────────────────────────
             x1 = max(x - PAD, 0)
             y1 = max(y - PAD, 0)
             x2 = min(x + w + PAD, frame.shape[1])
@@ -67,17 +63,15 @@ def run_detection():
             crop       = preprocess(frame[y1:y2, x1:x2])
             label, confidence = recognizer.predict(crop)
 
-            # ── Decide known vs unknown ──────────────────
             if confidence < CONFIDENCE_THRESHOLD:
                 name       = id_to_name.get(label, "Unknown")
-                box_color  = (0, 255, 0)   # green — recognised
+                box_color  = (0, 255, 0)
                 label_text = f"{name}  ({confidence:.1f})"
             else:
                 name       = "Unknown"
-                box_color  = (0, 0, 255)   # red — not recognised
+                box_color  = (0, 0, 255)
                 label_text = f"Unknown  ({confidence:.1f})"
 
-            # ── Draw box and label ───────────────────────
             cv2.rectangle(frame, (x1, y1), (x2, y2), box_color, 2)
             cv2.putText(frame, label_text, (x1, y1 - 10),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, box_color, 2)

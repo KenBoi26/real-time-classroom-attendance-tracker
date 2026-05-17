@@ -3,13 +3,11 @@ import os
 import json
 from modules.camera import get_camera
 
-# ── Paths ────────────────────────────────────────────────
 BASE_DIR        = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 EXIT_ZONE_PATH  = os.path.join(BASE_DIR, "config", "exit_zone.json")
 
 
 def setup_exit_zone():
-    """Open camera, let admin draw a rectangle over the door area, save to JSON."""
     cap = get_camera(0)
 
     ret, frame = cap.read()
@@ -41,7 +39,6 @@ def setup_exit_zone():
 
 
 def load_exit_zone():
-    """Load exit zone rectangle from JSON. Raises FileNotFoundError if missing."""
     if not os.path.exists(EXIT_ZONE_PATH):
         raise FileNotFoundError(
             f"[EXIT ZONE] No exit zone config found at {EXIT_ZONE_PATH}. "
@@ -57,7 +54,6 @@ def load_exit_zone():
 
 
 def is_inside_exit_zone(cx, cy, zone):
-    """Return True if point (cx, cy) falls inside the exit zone rectangle."""
     return (zone["x"] <= cx <= zone["x"] + zone["w"] and
             zone["y"] <= cy <= zone["y"] + zone["h"])
 

@@ -6,7 +6,6 @@ import shutil
 import numpy as np
 from collections import defaultdict
 
-# ── Paths ────────────────────────────────────────────────
 BASE_DIR    = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FACES_DIR   = os.path.join(BASE_DIR, "data", "faces")
 MODELS_DIR  = os.path.join(BASE_DIR, "data", "models")
@@ -15,7 +14,6 @@ LABEL_MAP   = os.path.join(MODELS_DIR, "label_map.json")
 
 os.makedirs(MODELS_DIR, exist_ok=True)
 
-# ── Split ratios ─────────────────────────────────────────
 TRAIN_RATIO = 0.70
 VAL_RATIO   = 0.15
 TEST_RATIO  = 0.15
@@ -24,7 +22,6 @@ RANDOM_SEED = 42
 
 
 def load_training_data():
-    """Load all face images grouped by person ID."""
     faces  = []
     labels = []
 
@@ -64,17 +61,11 @@ def load_training_data():
 
 
 def stratified_split(faces, labels, train_ratio, val_ratio, test_ratio, seed=42):
-    """
-    Split data into train / validation / test sets using stratified sampling.
-    Each person's images are split proportionally so every split contains
-    samples from every enrolled person.
-    """
     assert abs(train_ratio + val_ratio + test_ratio - 1.0) < 1e-6, \
         "Split ratios must sum to 1.0"
 
     rng = random.Random(seed)
 
-    # Group indices by label
     label_to_indices = defaultdict(list)
     for idx, lbl in enumerate(labels):
         label_to_indices[lbl].append(idx)
@@ -84,12 +75,10 @@ def stratified_split(faces, labels, train_ratio, val_ratio, test_ratio, seed=42)
     for lbl, indices in label_to_indices.items():
         rng.shuffle(indices)
         n = len(indices)
-        n_train = max(1, int(n * train_ratio))          # at least 1 for training
-        n_val   = max(1, int(n * val_ratio))             # at least 1 for validation
-        # rest goes to test (at least 1 if possible)
+        n_train = max(1, int(n * train_ratio))
+        n_val   = max(1, int(n * val_ratio))
         n_test  = max(1, n - n_train - n_val)
 
-        # Re-adjust if we over-allocated (very small datasets)
         if n_train + n_val + n_test > n:
             n_test = n - n_train - n_val
             if n_test < 0:
@@ -107,10 +96,6 @@ def stratified_split(faces, labels, train_ratio, val_ratio, test_ratio, seed=42)
 
 
 def evaluate(recognizer, faces, labels, id_to_name, set_name="Validation"):
-    """
-    Run recognizer.predict on each sample and report accuracy.
-    Returns overall accuracy (float).
-    """
     if len(faces) == 0:
         print(f"[{set_name.upper()}] No samples to evaluate.")
         return 0.0
@@ -118,7 +103,6 @@ def evaluate(recognizer, faces, labels, id_to_name, set_name="Validation"):
     correct = 0
     total   = len(faces)
 
-    # Per-person stats
     person_correct = defaultdict(int)
     person_total   = defaultdict(int)
 
@@ -159,12 +143,10 @@ def train_model():
         print("[TRAIN] No training data found. Exiting.")
         return
 
-    # ── Load id→name mapping for evaluation reports ──────
     with open(LABEL_MAP) as f:
         label_data = json.load(f)
     id_to_name = {int(k): v["name"] for k, v in label_data.items()}
 
-    # ── Stratified split ────────────────────────────────
     print(f"\n[TRAIN] Splitting data → Train {TRAIN_RATIO*100:.0f}% | "
           f"Val {VAL_RATIO*100:.0f}% | Test {TEST_RATIO*100:.0f}%  "
           f"(seed={RANDOM_SEED})")
@@ -183,7 +165,6 @@ def train_model():
     print(f"[TRAIN]   Test  : {len(test_faces)} samples")
     print(f"[TRAIN]   People: {n_people}")
 
-    # ── Train or Update LBPH on the TRAINING set only ─────────────
     recognizer = cv2.face.LBPHFaceRecognizer_create(
         radius=1,
         neighbors=8,
@@ -201,19 +182,15 @@ def train_model():
               f"across {len(set(train_labels))} people...")
         recognizer.train(train_faces, np.array(train_labels))
 
-    # ── Evaluate on VALIDATION set ──────────────────────
     val_acc = evaluate(recognizer, val_faces, val_labels, id_to_name,
                        set_name="Validation")
 
-    # ── Evaluate on TEST set ────────────────────────────
     test_acc = evaluate(recognizer, test_faces, test_labels, id_to_name,
                         set_name="Test")
 
-    # ── Save the model ──────────────────────────────────
     recognizer.save(MODEL_PATH)
     print(f"\n[TRAIN] Model saved → {MODEL_PATH}")
 
-    # ── Delete raw photos to save space ─────────────────
     print("\n[TRAIN] Cleaning up raw face images to save space...")
     for person_id in set(labels):
         person_dir = os.path.join(FACES_DIR, str(person_id))
@@ -221,7 +198,6 @@ def train_model():
             shutil.rmtree(person_dir)
             print(f"  Deleted photos for ID {person_id}")
 
-    # ── Final summary ───────────────────────────────────
     print(f"\n{'=' * 60}")
     print(f"   TRAINING SUMMARY")
     print(f"{'=' * 60}")
